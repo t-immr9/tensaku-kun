@@ -155,10 +155,12 @@ def preprocess_image(pil_img: Image.Image) -> Image.Image:
     return Image.fromarray(cv2.cvtColor(sharpened, cv2.COLOR_BGR2RGB))
 
 
-def call_gemini(api_key: str, pil_img: Image.Image, mode: str) -> dict:
+def call_gemini(api_key: str, pil_img: Image.Image, mode: str, criteria: str = "") -> dict:
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(MODEL_NAME)
     system_prompt = SYSTEM_PROMPT_MATH if mode == "数学モード" else SYSTEM_PROMPT_ESSAY
+    if criteria.strip():
+        system_prompt += f"\n\n【採点基準（必ず従うこと）】\n{criteria.strip()}"
     buf = io.BytesIO()
     pil_img.save(buf, format="JPEG", quality=90)
     img_bytes = buf.getvalue()
@@ -289,6 +291,23 @@ with st.sidebar:
         )
 
     mode = st.radio("📚 採点モード", ["数学モード", "作文モード"], index=0)
+
+    st.markdown("---")
+    st.markdown("#### 📋 採点基準（任意）")
+    criteria = st.text_area(
+        "採点基準",
+        placeholder="例：\n途中式がない解答は×にする\n単位がない場合は△にする\n名前の記入がない場合は採点せず警告する",
+        height=130,
+        label_visibility="collapsed",
+        help="ここに書いた基準がAIへの指示に追加されます。空欄の場合は標準の採点基準が適用されます。",
+    )
+    if criteria.strip():
+        st.markdown(
+            '<div style="background:#e8f5e9;border-radius:8px;padding:.4rem .8rem;'
+            'font-size:.78rem;color:#2e7d32;margin-top:.3rem;">✅ 採点基準が設定されています</div>',
+            unsafe_allow_html=True,
+        )
+
     st.markdown("---")
     st.markdown("#### 📷 撮影のコツ")
     st.markdown("""
@@ -299,7 +318,7 @@ with st.sidebar:
 """)
     st.markdown("---")
     st.markdown(
-        "<small style='color:#aaa'>添削くん v1.1<br>Gemini 1.5 Flash 使用</small>",
+        "<small style='color:#aaa'>添削くん v1.2<br>Gemini 1.5 Flash 使用</small>",
         unsafe_allow_html=True,
     )
 
@@ -376,7 +395,7 @@ if uploaded_file is not None:
 
             with st.spinner("Gemini が解析中…少々お待ちください"):
                 try:
-                    result = call_gemini(api_key, processed, mode)
+                    result = call_gemini(api_key, processed, mode, criteria)
                     annotated = draw_annotations(processed, result.get("annotations", []))
                     st.session_state.result_img = annotated
                     st.session_state.result_json = result
